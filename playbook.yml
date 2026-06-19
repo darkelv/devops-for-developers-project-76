@@ -1,0 +1,103 @@
+---
+- hosts: webservers
+  become: true
+
+  vars:
+    deploy_user: app
+    root_dir: /var/www/devops-for-developers-project-76
+    nginx_port: 80
+    service_name: "This is server {{ ansible_facts['hostname'] }}"
+    deploy_date_time: >-
+      {{
+        ansible_date_time.weekday
+        | replace('Monday', 'Пн')
+        | replace('Tuesday', 'Вт')
+        | replace('Wednesday', 'Ср')
+        | replace('Thursday', 'Чт')
+        | replace('Friday', 'Пт')
+        | replace('Saturday', 'Сб')
+        | replace('Sunday', 'Вс')
+      }}
+      {{ ansible_date_time.day }}
+      {{
+        ansible_date_time.month
+        | replace('01', 'янв')
+        | replace('02', 'фев')
+        | replace('03', 'мар')
+        | replace('04', 'апр')
+        | replace('05', 'май')
+        | replace('06', 'июн')
+        | replace('07', 'июл')
+        | replace('08', 'авг')
+        | replace('09', 'сен')
+        | replace('10', 'окт')
+        | replace('11', 'ноя')
+        | replace('12', 'дек')
+      }}
+      {{ ansible_date_time.year }}
+      {{ ansible_date_time.time }}
+    pip_install_packages:
+      - name: docker
+    docker_users:
+      - "{{ deploy_user }}"
+
+  pre_tasks:
+    - name: Update apt cache
+      ansible.builtin.apt:
+        update_cache: true
+        cache_valid_time: 3600
+      tags: [prepare, nginx, site]
+
+  tasks:
+    - name: Install nginx
+      ansible.builtin.apt:
+        name: nginx
+        state: present
+      tags: [nginx, site]
+
+    - name: Create site directory
+      ansible.builtin.file:
+        path: "{{ root_dir }}"
+        state: directory
+        owner: root
+        group: www-data
+        mode: "0755"
+      tags: [site, index]
+
+    - name: Update nginx config
+      ansible.builtin.template:
+        src: templates/nginx.conf.j2
+        dest: /etc/nginx/sites-available/default
+        owner: root
+        group: root
+        mode: "0644"
+      notify: Restart nginx
+      tags: site
+
+    - name: Add index page
+      ansible.builtin.template:
+        src: templates/index.html.j2
+        dest: "{{ root_dir }}/index.html"
+        owner: root
+        group: www-data
+        mode: "0644"
+      tags: [site, index]
+
+    - name: Ensure nginx is started and enabled
+      ansible.builtin.service:
+        name: nginx
+        state: started
+        enabled: true
+      tags: [nginx, site]
+
+  roles:
+    - role: geerlingguy.pip
+      tags: prepare
+    - role: geerlingguy.docker
+      tags: prepare
+
+  handlers:
+    - name: Restart nginx
+      ansible.builtin.service:
+        name: nginx
+        state: reloaded
