@@ -22,3 +22,29 @@ redmine_backends:
     port: 3001
   - name: redmine-2
     port: 3002
+
+datadog_api_key: "{{ vault_datadog_api_key }}"
+datadog_site: datadoghq.eu
+datadog_env: prod
+datadog_swap_file: /swapfile
+datadog_swap_size_mb: 2048
+datadog_config:
+  env: "{{ datadog_env }}"
+  tags:
+    - env:{{ datadog_env }}
+    - service:redmine
+datadog_checks:
+  http_check:
+    init_config:
+    instances:
+      - name: redmine
+        url: "https://{{ redmine_domain }}/"
+        timeout: 5
+        method: GET
+        http_response_status_code: "200"
+        content_match: Redmine
+        collect_response_time: true
+        tls_verify: true
+        tags:
+          - env:{{ datadog_env }}
+          - service:redmine

@@ -5,3 +5,5 @@ roles:
 
 collections:
   - name: community.docker
+  - name: datadog.dd
+  - name: ansible.posix

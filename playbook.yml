@@ -172,6 +172,51 @@
         redmine_ssl_enabled: true
       tags: ssl
 
+    - name: Check active swap
+      ansible.builtin.command: swapon --show=NAME --noheadings
+      register: active_swap
+      changed_when: false
+      tags: datadog
+
+    - name: Create swap file for Datadog Agent install
+      ansible.builtin.command:
+        cmd: "fallocate -l {{ datadog_swap_size_mb }}M {{ datadog_swap_file }}"
+        creates: "{{ datadog_swap_file }}"
+      register: datadog_swap_created
+      tags: datadog
+
+    - name: Set swap file permissions
+      ansible.builtin.file:
+        path: "{{ datadog_swap_file }}"
+        owner: root
+        group: root
+        mode: "0600"
+      tags: datadog
+
+    - name: Format swap file
+      ansible.builtin.command: "mkswap {{ datadog_swap_file }}"
+      when: datadog_swap_created.changed
+      tags: datadog
+
+    - name: Enable swap file
+      ansible.builtin.command: "swapon {{ datadog_swap_file }}"
+      when: datadog_swap_file not in active_swap.stdout_lines
+      tags: datadog
+
+    - name: Persist swap file
+      ansible.posix.mount:
+        name: none
+        src: "{{ datadog_swap_file }}"
+        fstype: swap
+        opts: sw
+        state: present
+      tags: datadog
+
+    - name: Install Datadog Agent
+      ansible.builtin.import_role:
+        name: datadog.dd.agent
+      tags: datadog
+
   roles:
     - role: geerlingguy.pip
       tags: prepare
