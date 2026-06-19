@@ -2,9 +2,6 @@
 - hosts: webservers
   become: true
 
-  vars:
-    deploy_user: app
-
   tasks:
     - name: Ensure deploy user exists
       ansible.builtin.user:

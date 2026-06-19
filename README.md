@@ -15,6 +15,13 @@
 - Deploy Datadog Agent: `make datadog`
 - Edit secrets: `make vault_edit`
 
+### Checks
+
+- Check playbook syntax: `ansible-playbook -i inventory.ini playbook.yml --syntax-check`
+- Check Redmine URL: `curl -I https://opsinfrapath.ru/`
+- Check Redmine database variables: `ansible webservers -i inventory.ini -m command -a 'docker exec redmine-1 printenv REDMINE_DB_POSTGRES REDMINE_DB_DATABASE REDMINE_DB_USERNAME'`
+- Check Datadog Agent: `ansible webservers -i inventory.ini -b -m command -a 'datadog-agent health'`
+
 ### Redmine
 
 The deployment runs three Docker containers on one server:
@@ -23,8 +30,8 @@ The deployment runs three Docker containers on one server:
 - `redmine-1` for the first Redmine instance
 - `redmine-2` for the second Redmine instance
 
-Common variables are stored in `group_vars/webservers/vars.yml`.
-Secret variables are stored in encrypted `group_vars/webservers/vault.yml`.
+Common variables are stored in `group_vars/all/vars.yml`.
+Secret variables for `webservers` are stored in encrypted `group_vars/webservers/vault.yml`.
 The local vault password file is `.vault_password`.
 
 ### Datadog
