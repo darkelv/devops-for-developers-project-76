@@ -1,18 +1,25 @@
 DOMAIN ?= opsinfrapath.ru
+PLAYBOOK = ansible-playbook -i inventory.ini
 
-.PHONY: install_requirements create_app prepare deploy ssl
+.PHONY: install_requirements create_app prepare deploy ssl vault_edit vault_view
 
 install_requirements:
 	ansible-galaxy install -r requirements.yml
 
 create_app:
-	ansible-playbook -i inventory.ini create_user.yml -u root
+	$(PLAYBOOK) create_user.yml -u root
 
 prepare: install_requirements
-	ansible-playbook -i inventory.ini playbook.yml --tags prepare
+	$(PLAYBOOK) playbook.yml --tags prepare
 
 deploy:
-	ansible-playbook -i inventory.ini playbook.yml --tags deploy
+	$(PLAYBOOK) playbook.yml --tags deploy
 
 ssl:
-	ansible-playbook -i inventory.ini playbook.yml --tags ssl -e redmine_domain=$(DOMAIN)
+	$(PLAYBOOK) playbook.yml --tags ssl -e redmine_domain=$(DOMAIN)
+
+vault_edit:
+	ansible-vault edit group_vars/webservers/vault.yml
+
+vault_view:
+	ansible-vault view group_vars/webservers/vault.yml

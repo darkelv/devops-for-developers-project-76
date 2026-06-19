@@ -3,17 +3,6 @@
   become: true
 
   vars:
-    deploy_user: app
-    redmine_domain: opsinfrapath.ru
-    redmine_port: 3000
-    redmine_dir: /opt/redmine
-    redmine_secret_key_base: change-me-in-vault
-    letsencrypt_webroot: /var/www/letsencrypt
-    redmine_backends:
-      - name: redmine-1
-        port: 3001
-      - name: redmine-2
-        port: 3002
     pip_install_packages:
       - name: docker
     docker_users:
@@ -64,6 +53,20 @@
         mode: "0755"
       tags: deploy
 
+    - name: Create Redmine Docker network
+      community.docker.docker_network:
+        name: "{{ redmine_network }}"
+      tags: deploy
+
+    - name: Create PostgreSQL env file
+      ansible.builtin.template:
+        src: templates/postgres.env.j2
+        dest: "{{ redmine_dir }}/postgres.env"
+        owner: "{{ deploy_user }}"
+        group: "{{ deploy_user }}"
+        mode: "0600"
+      tags: deploy
+
     - name: Create Redmine env file
       ansible.builtin.template:
         src: templates/redmine.env.j2
@@ -71,6 +74,31 @@
         owner: "{{ deploy_user }}"
         group: "{{ deploy_user }}"
         mode: "0600"
+      register: redmine_env_file
+      tags: deploy
+
+    - name: Run PostgreSQL container
+      community.docker.docker_container:
+        name: "{{ redmine_db_container }}"
+        image: postgres:16
+        state: started
+        restart_policy: always
+        env_file: "{{ redmine_dir }}/postgres.env"
+        networks:
+          - name: "{{ redmine_network }}"
+        volumes:
+          - redmine-postgres-data:/var/lib/postgresql/data
+      tags: deploy
+
+    - name: Wait for PostgreSQL
+      community.docker.docker_container_exec:
+        container: "{{ redmine_db_container }}"
+        command: "pg_isready -U {{ redmine_db_user }} -d {{ redmine_db_name }}"
+      register: postgres_ready
+      retries: 10
+      delay: 3
+      until: postgres_ready.rc == 0
+      changed_when: false
       tags: deploy
 
     - name: Pull Redmine Docker image
@@ -86,8 +114,13 @@
         state: started
         restart_policy: always
         env_file: "{{ redmine_dir }}/.env"
+        recreate: "{{ redmine_env_file.changed }}"
+        networks:
+          - name: "{{ redmine_network }}"
         published_ports:
           - "127.0.0.1:{{ item.port }}:3000"
+        volumes:
+          - redmine-files:/usr/src/redmine/files
       loop: "{{ redmine_backends }}"
       tags: deploy
 
