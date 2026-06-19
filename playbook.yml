@@ -4,38 +4,16 @@
 
   vars:
     deploy_user: app
-    root_dir: /var/www/devops-for-developers-project-76
-    nginx_port: 80
-    service_name: "This is server {{ ansible_facts['hostname'] }}"
-    deploy_date_time: >-
-      {{
-        ansible_date_time.weekday
-        | replace('Monday', 'Пн')
-        | replace('Tuesday', 'Вт')
-        | replace('Wednesday', 'Ср')
-        | replace('Thursday', 'Чт')
-        | replace('Friday', 'Пт')
-        | replace('Saturday', 'Сб')
-        | replace('Sunday', 'Вс')
-      }}
-      {{ ansible_date_time.day }}
-      {{
-        ansible_date_time.month
-        | replace('01', 'янв')
-        | replace('02', 'фев')
-        | replace('03', 'мар')
-        | replace('04', 'апр')
-        | replace('05', 'май')
-        | replace('06', 'июн')
-        | replace('07', 'июл')
-        | replace('08', 'авг')
-        | replace('09', 'сен')
-        | replace('10', 'окт')
-        | replace('11', 'ноя')
-        | replace('12', 'дек')
-      }}
-      {{ ansible_date_time.year }}
-      {{ ansible_date_time.time }}
+    redmine_domain: opsinfrapath.ru
+    redmine_port: 3000
+    redmine_dir: /opt/redmine
+    redmine_secret_key_base: change-me-in-vault
+    letsencrypt_webroot: /var/www/letsencrypt
+    redmine_backends:
+      - name: redmine-1
+        port: 3001
+      - name: redmine-2
+        port: 3002
     pip_install_packages:
       - name: docker
     docker_users:
@@ -46,49 +24,120 @@
       ansible.builtin.apt:
         update_cache: true
         cache_valid_time: 3600
-      tags: [prepare, nginx, site]
+      tags: [prepare, deploy, ssl]
 
   tasks:
     - name: Install nginx
       ansible.builtin.apt:
         name: nginx
         state: present
-      tags: [nginx, site]
-
-    - name: Create site directory
-      ansible.builtin.file:
-        path: "{{ root_dir }}"
-        state: directory
-        owner: root
-        group: www-data
-        mode: "0755"
-      tags: [site, index]
-
-    - name: Update nginx config
-      ansible.builtin.template:
-        src: templates/nginx.conf.j2
-        dest: /etc/nginx/sites-available/default
-        owner: root
-        group: root
-        mode: "0644"
-      notify: Restart nginx
-      tags: site
-
-    - name: Add index page
-      ansible.builtin.template:
-        src: templates/index.html.j2
-        dest: "{{ root_dir }}/index.html"
-        owner: root
-        group: www-data
-        mode: "0644"
-      tags: [site, index]
+      tags: [deploy, ssl]
 
     - name: Ensure nginx is started and enabled
       ansible.builtin.service:
         name: nginx
         state: started
         enabled: true
-      tags: [nginx, site]
+      tags: [deploy, ssl]
+
+    - name: Install certbot
+      ansible.builtin.apt:
+        name: certbot
+        state: present
+      tags: ssl
+
+    - name: Ensure Let's Encrypt webroot exists
+      ansible.builtin.file:
+        path: "{{ letsencrypt_webroot }}"
+        state: directory
+        owner: root
+        group: root
+        mode: "0755"
+      tags: ssl
+
+    - name: Create Redmine directory
+      ansible.builtin.file:
+        path: "{{ redmine_dir }}"
+        state: directory
+        owner: "{{ deploy_user }}"
+        group: "{{ deploy_user }}"
+        mode: "0755"
+      tags: deploy
+
+    - name: Create Redmine env file
+      ansible.builtin.template:
+        src: templates/redmine.env.j2
+        dest: "{{ redmine_dir }}/.env"
+        owner: "{{ deploy_user }}"
+        group: "{{ deploy_user }}"
+        mode: "0600"
+      tags: deploy
+
+    - name: Pull Redmine Docker image
+      community.docker.docker_image:
+        name: redmine:latest
+        source: pull
+      tags: deploy
+
+    - name: Run Redmine containers
+      community.docker.docker_container:
+        name: "{{ item.name }}"
+        image: redmine:latest
+        state: started
+        restart_policy: always
+        env_file: "{{ redmine_dir }}/.env"
+        published_ports:
+          - "127.0.0.1:{{ item.port }}:3000"
+      loop: "{{ redmine_backends }}"
+      tags: deploy
+
+    - name: Check Redmine SSL certificate
+      ansible.builtin.stat:
+        path: "/etc/letsencrypt/live/{{ redmine_domain }}/fullchain.pem"
+      register: redmine_ssl_certificate
+      tags: [deploy, ssl]
+
+    - name: Update Redmine nginx balancer config
+      ansible.builtin.template:
+        src: templates/redmine-nginx.conf.j2
+        dest: /etc/nginx/sites-available/default
+        owner: root
+        group: root
+        mode: "0644"
+      notify: Restart nginx
+      vars:
+        redmine_ssl_enabled: "{{ redmine_ssl_certificate.stat.exists | default(false) }}"
+      tags: [deploy, ssl]
+
+    - name: Apply nginx config before certificate issue
+      ansible.builtin.meta: flush_handlers
+      tags: ssl
+
+    - name: Issue Redmine certificate
+      ansible.builtin.command:
+        cmd: >-
+          certbot certonly
+          --webroot
+          --webroot-path {{ letsencrypt_webroot }}
+          --domain {{ redmine_domain }}
+          --agree-tos
+          --non-interactive
+          --keep-until-expiring
+          --register-unsafely-without-email
+        creates: "/etc/letsencrypt/live/{{ redmine_domain }}/fullchain.pem"
+      tags: ssl
+
+    - name: Update Redmine nginx HTTPS config
+      ansible.builtin.template:
+        src: templates/redmine-nginx.conf.j2
+        dest: /etc/nginx/sites-available/default
+        owner: root
+        group: root
+        mode: "0644"
+      notify: Restart nginx
+      vars:
+        redmine_ssl_enabled: true
+      tags: ssl
 
   roles:
     - role: geerlingguy.pip

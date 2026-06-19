@@ -1,4 +1,6 @@
-.PHONY: install_requirements create_app prepare nginx site index
+DOMAIN ?= opsinfrapath.ru
+
+.PHONY: install_requirements create_app prepare deploy ssl
 
 install_requirements:
 	ansible-galaxy install -r requirements.yml
@@ -9,11 +11,8 @@ create_app:
 prepare: install_requirements
 	ansible-playbook -i inventory.ini playbook.yml --tags prepare
 
-nginx:
-	ansible-playbook -i inventory.ini playbook.yml --tags nginx
+deploy:
+	ansible-playbook -i inventory.ini playbook.yml --tags deploy
 
-site:
-	ansible-playbook -i inventory.ini playbook.yml --tags site
-
-index:
-	ansible-playbook -i inventory.ini playbook.yml --tags index
+ssl:
+	ansible-playbook -i inventory.ini playbook.yml --tags ssl -e redmine_domain=$(DOMAIN)
