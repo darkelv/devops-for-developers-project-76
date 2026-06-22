@@ -1,6 +1,11 @@
 ---
 deploy_user: app
 
+pip_install_packages:
+  - name: docker
+docker_users:
+  - "{{ deploy_user }}"
+
 redmine_domain: opsinfrapath.ru
 redmine_port: 3000
 redmine_dir: /opt/redmine

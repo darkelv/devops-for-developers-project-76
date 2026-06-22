@@ -1,12 +1,13 @@
 DOMAIN ?= opsinfrapath.ru
-PLAYBOOK = ansible-playbook -i inventory.ini
+VAULT_PASSWORD_FILE ?= .vault_password
+PLAYBOOK = ansible-playbook --vault-password-file $(VAULT_PASSWORD_FILE) -i inventory.ini
 
-.PHONY: install_requirements create_app prepare deploy ssl datadog vault_edit vault_view
+.PHONY: install_requirements create_user prepare deploy ssl datadog vault_edit vault_view
 
 install_requirements:
 	ansible-galaxy install -r requirements.yml
 
-create_app:
+create_user:
 	$(PLAYBOOK) create_user.yml -u root
 
 prepare: install_requirements
@@ -22,7 +23,7 @@ datadog: install_requirements
 	$(PLAYBOOK) playbook.yml --tags datadog
 
 vault_edit:
-	ansible-vault edit group_vars/webservers/vault.yml
+	ansible-vault edit group_vars/webservers/vault.yml --vault-password-file $(VAULT_PASSWORD_FILE)
 
 vault_view:
-	ansible-vault view group_vars/webservers/vault.yml
+	ansible-vault view group_vars/webservers/vault.yml --vault-password-file $(VAULT_PASSWORD_FILE)

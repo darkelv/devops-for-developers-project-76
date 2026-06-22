@@ -8,7 +8,8 @@
 
 ### Instructions
 
-- Create deploy user: `make create_app`
+- Create a local `inventory.ini` file with the `webservers` group. The file is ignored because it contains host-specific data.
+- Create deploy user: `make create_user`
 - Prepare server: `make prepare`
 - Deploy Redmine: `make deploy`
 - Issue HTTPS certificate: `make ssl`
@@ -17,10 +18,10 @@
 
 ### Checks
 
-- Check playbook syntax: `ansible-playbook -i inventory.ini playbook.yml --syntax-check`
+- Check playbook syntax: `ansible-playbook --vault-password-file .vault_password -i inventory.ini playbook.yml --syntax-check`
 - Check Redmine URL: `curl -I https://opsinfrapath.ru/`
-- Check Redmine database variables: `ansible webservers -i inventory.ini -m command -a 'docker exec redmine-1 printenv REDMINE_DB_POSTGRES REDMINE_DB_DATABASE REDMINE_DB_USERNAME'`
-- Check Datadog Agent: `ansible webservers -i inventory.ini -b -m command -a 'datadog-agent health'`
+- Check Redmine database variables: `ansible webservers --vault-password-file .vault_password -i inventory.ini -m command -a 'docker exec redmine-1 printenv REDMINE_DB_POSTGRES REDMINE_DB_DATABASE REDMINE_DB_USERNAME'`
+- Check Datadog Agent: `ansible webservers --vault-password-file .vault_password -i inventory.ini -b -m command -a 'datadog-agent health'`
 
 ### Redmine
 
